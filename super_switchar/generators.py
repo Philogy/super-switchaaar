@@ -113,7 +113,7 @@ def _gen_checks_definitions(receive, fallback, indent_lvl):
     return check_defs
 
 
-ABS_MAX_BIT_SIZE = 12
+ABS_MAX_BIT_SIZE = 10
 
 
 def gen_empty_labels(fns):
@@ -137,33 +137,6 @@ def generate_direct_jump(fns, indent_lvl, max_bit_size=None, receive=False, fall
     sels = np.array([fn.selector for fn in fns])
 
     base_code = _gen_checks_definitions(receive, fallback, indent_lvl)
-
-    # 3-OP Dest-Deriv Switch
-    for cur_bit_size in range(bit_size, max_bit_size + 1):
-        mask = to_mask(cur_bit_size) << BASE_BLOCK_BIT_SIZE
-        masked = sels & mask
-        if len(set(masked)) == total_fns and 0 not in masked:
-            return base_code + '\n' + wrap_as_macro(
-                'MAIN()',
-                [
-                    '// load selector',
-                    SELECTOR_LOAD,
-                    f'dup1 {hex(mask)} and',
-                    'jump',
-                    '// padding',
-                    pad_code(7 - byte_size(mask)),
-                    '',
-                    _generate_direct_jump_dests(
-                        fns,
-                        BASE_BLOCK_BIT_SIZE,
-                        cur_bit_size,
-                        dests_prefix,
-                        skip_zero=True
-                    ),
-                    '\n// Functions',
-                    *gen_empty_labels(fns)
-                ]
-            )
 
     # 5-OP Dest-Deriv Switches
     for cur_bit_size in range(bit_size, max_bit_size + 1):
@@ -212,32 +185,3 @@ def generate_direct_jump(fns, indent_lvl, max_bit_size=None, receive=False, fall
                     *gen_empty_labels(fns)
                 ]
             )
-
-        for offset in range(0, 32 - cur_bit_size + 1):
-            masked = (sels >> offset) & to_mask(cur_bit_size)
-            if len(set(masked)) == total_fns and 0 not in masked:
-                if offset < BASE_BLOCK_BIT_SIZE:
-                    shift_code = f'{hex(BASE_BLOCK_BIT_SIZE - offset)} shl'
-                else:
-                    shift_code = f'{hex(offset - BASE_BLOCK_BIT_SIZE)} shr'
-                return base_code + '\n' + wrap_as_macro(
-                    'MAIN()',
-                    [
-                        '// load selector',
-                        SELECTOR_LOAD,
-                        f'dup1 {shift_code} {hex(mask)} and',
-                        'jump',
-                        '// padding',
-                        pad_code(4 - byte_size(mask)),
-                        '',
-                        _generate_direct_jump_dests(
-                            fns,
-                            offset,
-                            cur_bit_size,
-                            dests_prefix,
-                            skip_zero=True
-                        ),
-                        '\n// Functions',
-                        *gen_empty_labels(fns)
-                    ]
-                )
